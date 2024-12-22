@@ -8,9 +8,9 @@ import os
 
 app = Flask(__name__)
 CORS(app)
-
+basedir = os.path.abspath(os.path.dirname(__file__))
 # Set up database URI and configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.join(basedir, "instance", "users.db")}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
