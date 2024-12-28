@@ -8,9 +8,9 @@ import os
 
 app = Flask(__name__)
 CORS(app)
-basedir = os.path.abspath(os.path.dirname(__file__))
+
 # Set up database URI and configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.join(basedir, "instance", "users.db")}'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
@@ -30,7 +30,7 @@ GMAIL_USER = 'ayusharya.personal@gmail.com'  # Set GMAIL_USER in your environmen
 APP_PASSWORD = 'uclx fhnh plxf jgjh'  # Set APP_PASSWORD in your environment variables
 
 # Email sending function
-def send_email(gmail_user, app_password, to_email, company_name, hr_name, specific_role):
+def send_email(gmail_user, app_password, to_email, company_name, specific_role,hr_name):
     smtp_server = "smtp.gmail.com"
     smtp_port = 587
 
@@ -188,9 +188,9 @@ def send_email(gmail_user, app_password, to_email, company_name, hr_name, specif
 
              <p>I hope this email finds you well. My name is Ayush Arya, a final-year B.Tech student specializing in Computer Science and Engineering with a focus on Machine Learning. I am reaching out to express my strong interest in the <span class="highlight"> {specific_role}</span> position at <span class="highlight">{company_name}</span>.</p>
 
-                <p>Having developed projects like a Image Classification  system using Open CV,CNN and a conversational AI tool, I have honed my technical expertise in full-stack development, cloud computing, and problem-solving. My recent internships at Astroverse and IIT BHU have further strengthened my ability to contribute effectively in collaborative and innovative environments.</p>
+                <p>As an AI/ML Intern at Astroverse Pvt Ltd, I led the development of a chatbot that improved customer support efficiency by 20% and significantly increased user engagement. I also created the PDF2Chat application, utilizing advanced language models and the LangChain framework to transform PDF documents into dynamic, interactive chat experiences. This experience deepened my technical expertise in natural language processing and strengthened my understanding of user-centric AI solutions.</p>
 
-                <p>I am particularly impressed by your organization's</span> commitment to focus on fostering innovation and delivering impactful solutions that enhance user experiences and drive technological progress, and I would love the opportunity to bring my skills and enthusiasm to your team.</p>
+                <p>I am particularly impressed by your organization commitment to focus on fostering innovation and delivering impactful solutions that enhance user experiences and drive technological progress, and I would love the opportunity to bring my skills and enthusiasm to your team.</p>
 
                 <p>I have attached my resume for your reference. I would greatly appreciate the chance to discuss how I can contribute to <span class="highlight"> {company_name}'s </span>goals. Please let me know if a convenient time is available for a conversation.</p>
 
@@ -287,27 +287,198 @@ def add_user():
         return jsonify({"message": f"Failed to add user: {e}"}), 500
 
 # Route to send an email (only POST method now)
+# Route to send an email (POST method)
 @app.route('/api/send_email/<int:user_id>', methods=['POST'])
 def send_email_route(user_id):
+    # Fetch the user by ID
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"message": "User not found!"}), 404
+
+    # Determine the HR name based on the gender
+    hr_name = "Sir" if user.hr_gender == "M" else "Mam"
+
+    # Send the email using the send_email function
+    email_sent = send_email(
+        gmail_user=GMAIL_USER,
+        app_password=APP_PASSWORD,
+        to_email=user.email,
+        company_name=user.company_name,
+        specific_role=user.post,
+        hr_name=f"{hr_name}"
+    )
+
+    if email_sent:
+        try:
+            # Increment the email_sent_count for the user
+            user.email_sent_count += 1
+            db.session.commit()
+            return jsonify({"message": "Email sent successfully!"}), 200
+        except Exception as e:
+            return jsonify({"message": f"Email sent but failed to update database: {e}"}), 500
+    else:
+        return jsonify({"message": "Failed to send email!"}), 500
+
+
+
+
+# Route to update an existing user's details
+@app.route('/api/users/<int:user_id>', methods=['GET'])
+def get_user(user_id):
+    user = User.query.get(user_id)  # Fetch user from DB by ID
+    if user:
+        return jsonify({
+            'username': user.username,
+            'email': user.email,
+            'company_name': user.company_name,
+            'hr_gender': user.hr_gender,
+            'post': user.post,
+            'country': user.country
+        })
+    else:
+        return jsonify({'error': 'User not found'}), 404
+
+@app.route('/api/users/<int:user_id>', methods=['PUT'])
+def update_user(user_id):
     user = User.query.get(user_id)
     if not user:
         return jsonify({"message": "User not found!"}), 404
 
     data = request.get_json()
-    specific_role = data.get('specific_role')
-    if not specific_role:
-        return jsonify({"message": "Missing specific role!"}), 400
 
-    if send_email(
-        GMAIL_USER, APP_PASSWORD, user.email, user.company_name,
-        user.username, specific_role
-    ):
-        user.email_sent_count += 1  # Increment the email sent count
+    # Update user details
+    user.username = data.get('username', user.username)
+    user.email = data.get('email', user.email)
+    user.company_name = data.get('company_name', user.company_name)
+    user.hr_gender = data.get('hr_gender', user.hr_gender)
+    user.post = data.get('post', user.post)
+    user.country = data.get('country', user.country)
+
+    try:
         db.session.commit()
-        return jsonify({"message": f"Email sent successfully to {user.email}! User has sent {user.email_sent_count} emails."})
-    else:
-        return jsonify({"message": "Failed to send email!"}), 500
+        return jsonify({"message": "User details updated successfully!"})
+    except Exception as e:
+        return jsonify({"message": f"Failed to update user: {e}"}), 500
+# Route to delete a user
+@app.route('/api/users/<int:user_id>', methods=['DELETE'])
+def delete_user(user_id):
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"message": "User not found!"}), 404
 
+    try:
+        db.session.delete(user)
+        db.session.commit()
+        return jsonify({"message": "User deleted successfully!"})
+    except Exception as e:
+        return jsonify({"message": f"Failed to delete user: {e}"}), 500
+
+
+import time
+from concurrent.futures import ThreadPoolExecutor
+
+
+# Add this new route for the Pulser feature
+@app.route('/api/pulse_emails', methods=['POST'])
+def pulse_emails():
+    BATCH_SIZE = 95  # Gmail's limit is ~100 emails per day
+
+    users = User.query.all()
+
+    total_users = len(users)
+    successful_sends = []
+
+    results = {
+
+        'success': True,
+
+        'sent_count': 0,
+
+        'remaining': 0,
+
+        'errors': []
+
+    }
+
+    def send_with_rate_limit(user):
+
+        try:
+
+            hr_name = "Sir" if user.hr_gender == "M" else "Mam"
+
+            email_sent = send_email(
+
+                gmail_user=GMAIL_USER,
+
+                app_password=APP_PASSWORD,
+
+                to_email=user.email,
+
+                company_name=user.company_name,
+
+                specific_role=user.post,
+
+                hr_name=hr_name
+
+            )
+
+            if email_sent:
+                print(f"Successfully sent email to: {user.email}")
+                user.email_sent_count += 1
+                successful_sends.append(user.email)  # Track success
+                db.session.add(user)
+                db.session.commit()  # Commit per successful send
+                return True
+            # print(f"Failed to send email to: {user.email}")
+            return False
+
+        except Exception as e:
+
+            # print(f"Error sending to {user.email}: {str(e)}")
+
+            return False
+
+    try:
+
+        # Process first batch only
+
+        current_batch = users[:BATCH_SIZE]
+
+        with ThreadPoolExecutor(max_workers=3) as executor:
+
+            future_to_user = {executor.submit(send_with_rate_limit, user): user
+
+                              for user in current_batch}
+
+            for future in future_to_user:
+
+                if future.result():
+                    results['sent_count'] += 1
+
+                time.sleep(1)  # Rate limiting
+
+        db.session.commit()
+
+        results['remaining'] = total_users - BATCH_SIZE
+
+        return jsonify({
+            'success': True,
+            'sent_count': len(successful_sends),
+            'remaining': total_users - BATCH_SIZE,
+            'successful_emails': successful_sends
+        })
+
+    except Exception as e:
+
+        db.session.rollback()
+
+        return jsonify({
+
+            'success': False,
+
+            'error': str(e)
+
+        }), 500
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()  # Make sure to create the database tables if they don't exist
