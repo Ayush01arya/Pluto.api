@@ -214,7 +214,7 @@ def send_email(gmail_user, app_password, to_email, company_name, specific_role,h
                         <a href="https://linkedin.com/in/ayusharya25">
                             <img src="https://img.icons8.com/ios-filled/50/000000/linkedin.png" class="icon" alt="LinkedIn">LinkedIn
                         </a> |
-                        <a href="https://ayusharya.me/assets/0Ayush_Arya_Resume.pdf">
+                        <a href="https://ayusharya.me/assets/resume.pdf">
                             <img src="https://img.icons8.com/ios-filled/50/resume.png" class="icon" alt="Resume">Resume
                         </a> 
 
